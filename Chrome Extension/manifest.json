@@ -1,0 +1,28 @@
+{
+    "manifest_version": 3,
+    "name": "Chess.com Autoplayer",
+    "description": "Enable moves to be automatically played on chess.com and opponent moves to be recorded",
+    "version": "1.0",
+    "icons": {
+        "16": "images/white_pawn_16.png",
+        "32": "images/white_pawn_32.png",
+        "48": "images/white_pawn_48.png",
+        "256": "images/white_pawn_256.png"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "icons": {
+            "16": "images/white_pawn_16.png",
+            "32": "images/white_pawn_32.png",
+            "48": "images/white_pawn_48.png",
+            "256": "images/white_pawn_256.png"
+        }
+    },
+    "permissions": [
+        "activeTab", 
+        "scripting"
+    ]
+
+  }
