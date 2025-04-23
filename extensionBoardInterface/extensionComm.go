@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/gorilla/websocket"
 )
@@ -25,40 +27,93 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+
 	// Listen for incoming messages
+	playing := false
+	myMove := false
 	for {
 		// Read message from the client
-		_, rawData, err := conn.ReadMessage()
+		msg, err := readMessage(conn)
 		if err != nil {
 			fmt.Println("Error reading message:", err)
 			break
 		}
-		msg := string(rawData)
-		fmt.Printf("Received: %s\n", msg)
-		// confirm connection
-		if msg == "connecting" {
-			if err := conn.WriteMessage(websocket.TextMessage, []byte("connection confirmed")); err != nil {
-				fmt.Println("Error writing message:", err)
-				break
-			}
-			fmt.Println("Established websocket connection to chess.com extension")
-		} else {
-			// get user to input move from terminal
-			fmt.Println("Received move: ", msg)
-			fmt.Println("input move:")
-			reader := bufio.NewReader(os.Stdin)
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				log.Fatal(err)
+
+		// receive game start message if we're not already playing, else just receive move
+		if !playing {
+			// ensure game start message is in the correct format. If not, then just ignore the message
+			fmt.Printf("Received: %s\n", msg)
+			myColor, numMovesString, found := strings.Cut(msg, ",")
+			fmt.Println(myColor, numMovesString, found)
+			numMoves, err := strconv.Atoi(strings.TrimSpace(numMovesString))
+			fmt.Println(numMoves, err)
+			if !found || (myColor != "white" && myColor != "black") || err != nil {
+				continue
 			}
 
-			if err := conn.WriteMessage(websocket.TextMessage, []byte(line)); err != nil {
-				fmt.Println("Error writing message:", err)
-				break
+			playing = true
+
+			// get moves
+			for i := 0; i < numMoves; i++ {
+				msg, err := readMessage(conn)
+				if err != nil {
+					fmt.Println("Error reading message:", err)
+					break
+				}
+				fmt.Printf("Received move: %s\n", msg)
 			}
-			fmt.Println("Established websocket connection to chess.com extension")
+
+			// if its my move then make a move
+			if (numMoves%2 == 0 && myColor == "white") || (numMoves%2 == 1 && myColor == "black") {
+				myMove = true
+				if err := makeMove(conn); err != nil {
+					fmt.Println("Error writing message:", err)
+					break
+				}
+			}
+
+		} else {
+			fmt.Println("Received move: ", msg)
+
+			if myMove {
+				// TODO: check that the move received back from the extension matches the one we just sent to it
+				myMove = false
+			} else {
+				myMove = true
+				// make a move
+				if err := makeMove(conn); err != nil {
+					fmt.Println("Error writing message:", err)
+					break
+				}
+			}
 		}
 	}
+}
+
+func readMessage(conn *websocket.Conn) (string, error) {
+	_, rawData, err := conn.ReadMessage()
+	if err != nil {
+		return "error", err
+	}
+	msg := string(rawData)
+	return msg, err
+}
+
+func makeMove(conn *websocket.Conn) error {
+	// get user to input move from the terminal
+	fmt.Println("input move:")
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// send move over socket
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(line)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {
